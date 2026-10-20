@@ -1,0 +1,404 @@
+"""
+Cricbuzz API Client & Data Transformation Utilities
+Supports Live, Recent, and Upcoming matches with full Test match (4 innings) parsing.
+"""
+
+import requests
+import pandas as pd
+import streamlit as st
+
+DEFAULT_API_KEY = "cd436a9136msh7134d9e6d53e7a4p1ee911jsn476d453f0ea8"
+API_HOST = "cricbuzz-cricket.p.rapidapi.com"
+
+
+def get_headers(api_key=None):
+    key = api_key or st.session_state.get("rapidapi_key") or DEFAULT_API_KEY
+    return {
+        "x-rapidapi-key": key.strip(),
+        "x-rapidapi-host": API_HOST
+    }
+
+
+def format_overs(val):
+    """
+    Format cricket overs properly.
+    E.g. Cricbuzz stores 52.6 as 53.0 (6 balls = full over), 52.1 as 52.1.
+    """
+    if val is None or val == "":
+        return "-"
+    try:
+        val = float(val)
+        whole = int(val)
+        ball = int(round((val - whole) * 10))
+        if ball >= 6:
+            whole += 1
+            ball = 0
+        return f"{whole}.{ball}" if ball > 0 else f"{whole}.0"
+    except Exception:
+        return str(val)
+
+
+def format_innings_score(inng_data):
+    """Format single innings dictionary into standard cricket notation (e.g. 245/8 d (45.2 ov))"""
+    if not inng_data:
+        return None
+    runs = inng_data.get("runs", 0)
+    wickets = inng_data.get("wickets", 0)
+    overs = format_overs(inng_data.get("overs"))
+    declared = inng_data.get("isDeclared", False) or inng_data.get("isdeclared", False)
+
+    dec_suffix = " d" if declared else ""
+    ov_str = f" ({overs} ov)" if overs != "-" else ""
+    return f"{runs}/{wickets}{dec_suffix}{ov_str}"
+
+
+def format_team_display_score(score_dict, is_test=False):
+    """
+    Format a team's score across 1 or 2 innings.
+    For Test matches, handles both inngs1 and inngs2 (e.g. 166/10 & 251/10).
+    """
+    if not score_dict:
+        return "Yet to Bat"
+    
+    i1 = score_dict.get("inngs1")
+    i2 = score_dict.get("inngs2")
+
+    s1 = format_innings_score(i1)
+    s2 = format_innings_score(i2)
+
+    if is_test:
+        if s1 and s2:
+            return f"{s1} & {s2}"
+        elif s1:
+            return s1
+        return "Yet to Bat"
+    else:
+        return s1 or "Yet to Bat"
+
+
+# ==============================================================================
+# MATCHES API
+# ==============================================================================
+
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_matches_data(category="live", api_key=None):
+    """
+    Fetch matches from Cricbuzz API for live, recent, or upcoming categories.
+    """
+    valid_endpoints = {
+        "live": "https://cricbuzz-cricket.p.rapidapi.com/matches/v1/live",
+        "recent": "https://cricbuzz-cricket.p.rapidapi.com/matches/v1/recent",
+        "upcoming": "https://cricbuzz-cricket.p.rapidapi.com/matches/v1/upcoming"
+    }
+    url = valid_endpoints.get(category.lower(), valid_endpoints["live"])
+    headers = get_headers(api_key)
+
+    try:
+        response = requests.get(url, headers=headers, timeout=12)
+        if response.status_code == 429:
+            st.error("⚠️ RapidAPI rate limit / quota exceeded for current API key. Please input your personal key in the sidebar.")
+            return pd.DataFrame()
+        if response.status_code != 200:
+            st.warning(f"Unable to fetch matches (HTTP {response.status_code}): {response.text[:120]}")
+            return pd.DataFrame()
+
+        data = response.json()
+    except Exception as e:
+        st.error(f"Error connecting to Cricbuzz API: {e}")
+        return pd.DataFrame()
+
+    matches = []
+    for type_match in data.get("typeMatches", []):
+        match_type = type_match.get("matchType", "Other")  # International, League, Domestic, Women
+        for series_match in type_match.get("seriesMatches", []):
+            series = series_match.get("seriesAdWrapper", {})
+            series_name = series.get("seriesName", "Unknown Series")
+            for match in series.get("matches", []):
+                info = match.get("matchInfo", {})
+                match_id = info.get("matchId")
+                match_desc = info.get("matchDesc", "")
+                match_format = info.get("matchFormat", "UNKNOWN").upper()
+                is_test = match_format == "TEST" or "test" in match_desc.lower()
+
+                start_date_raw = info.get("startDate")
+                try:
+                    start_date = pd.to_datetime(pd.to_numeric(start_date_raw), unit="ms").strftime("%d %b %Y, %I:%M %p")
+                except Exception:
+                    start_date = "N/A"
+
+                state = info.get("state", "Unknown")
+                status = info.get("status", "")
+                team1 = info.get("team1", {})
+                team2 = info.get("team2", {})
+                venue_info = info.get("venueInfo", {})
+                ground = venue_info.get("ground", "Venue TBA")
+                city = venue_info.get("city", "")
+                full_venue = f"{ground}, {city}".strip(", ") if city else ground
+
+                match_score = match.get("matchScore", {})
+                team1_score_dict = match_score.get("team1Score", {})
+                team2_score_dict = match_score.get("team2Score", {})
+
+                # Innings 1 & 2 extractions
+                t1_i1 = team1_score_dict.get("inngs1", {})
+                t1_i2 = team1_score_dict.get("inngs2", {})
+                t2_i1 = team2_score_dict.get("inngs1", {})
+                t2_i2 = team2_score_dict.get("inngs2", {})
+
+                team1_score_str = format_team_display_score(team1_score_dict, is_test=is_test)
+                team2_score_str = format_team_display_score(team2_score_dict, is_test=is_test)
+
+                # Total runs calculated for Test lead/margin comparison
+                t1_total_runs = (t1_i1.get("runs") or 0) + (t1_i2.get("runs") or 0)
+                t2_total_runs = (t2_i1.get("runs") or 0) + (t2_i2.get("runs") or 0)
+
+                matches.append({
+                    "match_id": match_id,
+                    "match_desc": match_desc,
+                    "series_name": series_name,
+                    "match_type": match_type,
+                    "match_format": match_format,
+                    "is_test": is_test,
+                    "start_date": start_date,
+                    "state": state,
+                    "status": status,
+                    "venue": full_venue,
+                    "team1_name": team1.get("teamName", "Team 1"),
+                    "team1_short": team1.get("teamSName", "T1"),
+                    "team1_score": team1_score_str,
+                    "team1_inngs1": t1_i1,
+                    "team1_inngs2": t1_i2,
+                    "team1_total_runs": t1_total_runs,
+                    "team2_name": team2.get("teamName", "Team 2"),
+                    "team2_short": team2.get("teamSName", "T2"),
+                    "team2_score": team2_score_str,
+                    "team2_inngs1": t2_i1,
+                    "team2_inngs2": t2_i2,
+                    "team2_total_runs": t2_total_runs,
+                })
+
+    return pd.DataFrame(matches)
+
+
+# ==============================================================================
+# SCORECARD API (Dynamic 1 to 4 Innings Support for Test Matches)
+# ==============================================================================
+
+@st.cache_data(ttl=60, show_spinner=False)
+def fetch_scorecard_data(match_id, api_key=None):
+    """
+    Fetch comprehensive scorecard data for a match.
+    Dynamically processes all innings (up to 4 innings for Test matches).
+    Returns list of innings dictionaries with batting, bowling, fow, and extras.
+    """
+    url = f"https://cricbuzz-cricket.p.rapidapi.com/mcenter/v1/{match_id}/scard"
+    headers = get_headers(api_key)
+
+    try:
+        response = requests.get(url, headers=headers, timeout=12)
+        if response.status_code != 200:
+            return {
+                "success": False,
+                "error": f"Failed to fetch scorecard (HTTP {response.status_code})",
+                "innings": [],
+                "match_complete": False
+            }
+        data = response.json()
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "innings": [],
+            "match_complete": False
+        }
+
+    raw_scorecard = data.get("scorecard", [])
+    is_match_complete = data.get("ismatchcomplete", False)
+    status_msg = data.get("status", "")
+
+    parsed_innings = []
+
+    for inng in raw_scorecard:
+        inng_id = inng.get("inningsid", len(parsed_innings) + 1)
+        bat_team_name = inng.get("batteamname", f"Innings {inng_id}")
+        bat_team_short = inng.get("batteamsname", "")
+        score = inng.get("score", 0)
+        wickets = inng.get("wickets", 0)
+        overs = inng.get("overs", 0)
+        run_rate = inng.get("runrate", 0.0)
+        is_declared = inng.get("isdeclared", False)
+        is_follow_on = inng.get("isfollowon", False)
+        extras = inng.get("extras", {})
+
+        # Parse Batsmen
+        batters_list = []
+        for b in inng.get("batsman", []):
+            role_badge = ""
+            if b.get("iscaptain"): role_badge += " (c)"
+            if b.get("iskeeper"): role_badge += " (wk)"
+
+            runs = b.get("runs", 0)
+            balls = b.get("balls", 0)
+            fours = b.get("fours", 0)
+            sixes = b.get("sixes", 0)
+            sr = b.get("strkrate", "0.0")
+
+            batters_list.append({
+                "Batter": f"{b.get('name', 'Unknown')}{role_badge}",
+                "Dismissal": b.get("outdec") or "not out",
+                "Runs": runs,
+                "Balls": balls,
+                "4s": fours,
+                "6s": sixes,
+                "SR": float(sr) if sr and sr != "-" else 0.0
+            })
+        bat_df = pd.DataFrame(batters_list)
+
+        # Parse Bowlers
+        bowlers_list = []
+        for bw in inng.get("bowler", []):
+            role_badge = " (c)" if bw.get("iscaptain") else ""
+            bowlers_list.append({
+                "Bowler": f"{bw.get('name', 'Unknown')}{role_badge}",
+                "Overs": bw.get("overs", "0"),
+                "Maidens": bw.get("maidens", 0),
+                "Runs": bw.get("runs", 0),
+                "Wickets": bw.get("wickets", 0),
+                "Economy": float(bw.get("economy", 0.0)) if bw.get("economy") and bw.get("economy") != "-" else 0.0,
+                "Dots": bw.get("dots", 0)
+            })
+        bowl_df = pd.DataFrame(bowlers_list)
+
+        # Parse Fall of Wickets
+        fow_list = []
+        fow_data = inng.get("fow", {}).get("fow", [])
+        for f in fow_data:
+            fow_list.append({
+                "Wkt #": len(fow_list) + 1,
+                "Batter": f.get("batsmanname", "Unknown"),
+                "Score": f.get("runs", 0),
+                "Over": format_overs(f.get("overnbr"))
+            })
+        fow_df = pd.DataFrame(fow_list)
+
+        # Parse Partnerships
+        partnerships = []
+        part_data = inng.get("partnership", {}).get("partnership", [])
+        for p in part_data:
+            partnerships.append({
+                "Batter 1": f"{p.get('bat1name', '')} ({p.get('bat1runs', 0)})",
+                "Batter 2": f"{p.get('bat2name', '')} ({p.get('bat2runs', 0)})",
+                "Partnership Runs": p.get("totalruns", 0),
+                "Balls": p.get("totalballs", 0)
+            })
+        partnerships_df = pd.DataFrame(partnerships)
+
+        parsed_innings.append({
+            "innings_id": inng_id,
+            "bat_team_name": bat_team_name,
+            "bat_team_short": bat_team_short,
+            "score": score,
+            "wickets": wickets,
+            "overs": format_overs(overs),
+            "run_rate": run_rate,
+            "is_declared": is_declared,
+            "is_follow_on": is_follow_on,
+            "extras": extras,
+            "batting_df": bat_df,
+            "bowling_df": bowl_df,
+            "fow_df": fow_df,
+            "partnerships_df": partnerships_df
+        })
+
+    return {
+        "success": True,
+        "innings": parsed_innings,
+        "match_complete": is_match_complete,
+        "status": status_msg
+    }
+
+
+# ==============================================================================
+# PLAYER STATS API
+# ==============================================================================
+
+@st.cache_data(ttl=300, show_spinner=False)
+def search_player_data(name, api_key=None):
+    """Search players by name keyword"""
+    if not name or not name.strip():
+        return pd.DataFrame()
+    url = "https://cricbuzz-cricket.p.rapidapi.com/stats/v1/player/search"
+    headers = get_headers(api_key)
+    try:
+        response = requests.get(url, headers=headers, params={"plrN": name.strip()}, timeout=10)
+        if response.status_code != 200:
+            return pd.DataFrame()
+        data = response.json()
+        players = []
+        for p in data.get("player", []):
+            players.append({
+                "id": str(p.get("id")),
+                "name": p.get("name", "Unknown"),
+                "teamName": p.get("teamName", ""),
+                "faceImageId": p.get("faceImageId"),
+                "dob": p.get("dob", "")
+            })
+        return pd.DataFrame(players)
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_player_info(player_id, api_key=None):
+    """Fetch personal details, rankings, bio, recent form for player"""
+    url = f"https://cricbuzz-cricket.p.rapidapi.com/stats/v1/player/{player_id}"
+    headers = get_headers(api_key)
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return {}
+        return response.json()
+    except Exception:
+        return {}
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_player_batting_stats(player_id, api_key=None):
+    """Fetch structured career batting statistics across Test, ODI, T20, and IPL"""
+    url = f"https://cricbuzz-cricket.p.rapidapi.com/stats/v1/player/{player_id}/batting"
+    headers = get_headers(api_key)
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return pd.DataFrame()
+        data = response.json()
+        rows = []
+        for mv in data.get("values", []):
+            vals = mv.get("values", [])
+            if len(vals) >= 5:
+                rows.append([vals[0], vals[1], vals[2], vals[3], vals[4]])
+        df = pd.DataFrame(rows, columns=["Metric", "Test", "ODI", "T20", "IPL"])
+        return df.set_index("Metric")
+    except Exception:
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_player_bowling_stats(player_id, api_key=None):
+    """Fetch structured career bowling statistics across Test, ODI, T20, and IPL"""
+    url = f"https://cricbuzz-cricket.p.rapidapi.com/stats/v1/player/{player_id}/bowling"
+    headers = get_headers(api_key)
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200:
+            return pd.DataFrame()
+        data = response.json()
+        rows = []
+        for mv in data.get("values", []):
+            vals = mv.get("values", [])
+            if len(vals) >= 5:
+                rows.append([vals[0], vals[1], vals[2], vals[3], vals[4]])
+        df = pd.DataFrame(rows, columns=["Metric", "Test", "ODI", "T20", "IPL"])
+        return df.set_index("Metric")
+    except Exception:
+        return pd.DataFrame()
