@@ -16,7 +16,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for modern styling
+# Custom CSS for modern styling & prominent tabs
 st.markdown("""
 <style>
     /* Metric styling */
@@ -25,15 +25,18 @@ st.markdown("""
         font-weight: 700 !important;
     }
     
-    /* Tabs styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
+    /* Main Top Tabs styling */
+    div[data-testid="stTabs"] > div > div[data-baseweb="tab-list"] {
+        gap: 12px;
+        margin-top: 10px;
+        margin-bottom: 25px;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
     }
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 6px 6px 0px 0px;
-        padding-top: 10px;
-        padding-bottom: 10px;
-        font-weight: 600;
+    div[data-testid="stTabs"] > div > div[data-baseweb="tab-list"] button[data-baseweb="tab"] {
+        border-radius: 8px 8px 0px 0px;
+        padding: 12px 28px;
+        font-weight: 700;
+        font-size: 1.15rem;
     }
     
     /* Sidebar header */
@@ -62,7 +65,7 @@ if "rapidapi_key" not in st.session_state:
     st.session_state["rapidapi_key"] = DEFAULT_API_KEY
 
 # ==============================================================================
-# SIDEBAR NAVIGATION & SETTINGS
+# SIDEBAR SETTINGS & INFO
 # ==============================================================================
 
 with st.sidebar:
@@ -72,19 +75,6 @@ with st.sidebar:
             <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: #888;">Real-Time Cricket Intelligence</p>
         </div>
     """, unsafe_allow_html=True)
-
-    st.markdown("### 🧭 Navigation")
-    page = st.radio(
-        "Select View",
-        [
-            "📡 Live & Recent Matches",
-            "👤 Player Stats & Profiles"
-        ],
-        index=0,
-        label_visibility="collapsed"
-    )
-
-    st.markdown("---")
 
     # API Settings Expander
     with st.expander("⚙️ API Configuration", expanded=False):
@@ -123,10 +113,25 @@ with st.sidebar:
 
 
 # ==============================================================================
-# PAGE ROUTING
+# TOP TITLE & MAIN TAB NAVIGATION
 # ==============================================================================
 
-if page == "📡 Live & Recent Matches":
+st.markdown("""
+    <div style="margin-bottom: 10px;">
+        <h1 style="margin: 0; padding: 0;">🏏 Cricbuzz LiveStats Pro</h1>
+        <p style="color: #888; font-size: 1.05rem; margin-top: 4px;">
+            Real-Time Cricket Intelligence, 4-Innings Test Match Analytics & Player Statistics
+        </p>
+    </div>
+""", unsafe_allow_html=True)
+
+tab_live_matches, tab_player_stats = st.tabs([
+    "📡 Live Matches",
+    "👤 Player Stats"
+])
+
+with tab_live_matches:
     Pg1_Live_Matches.app()
-elif page == "👤 Player Stats & Profiles":
+
+with tab_player_stats:
     Pg2_Player_Stats.app()

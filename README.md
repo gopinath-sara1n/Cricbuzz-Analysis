@@ -49,7 +49,7 @@ A modern, high-performance cricket analytics dashboard and match center built wi
 
 ```text
 Cricbuzz-Analysis/
-├── home.py               # Main application router and sidebar navigation
+├── home.py               # Main application entrypoint with top-level tabs navigation ("📡 Live Matches", "👤 Player Stats")
 ├── Pg1_Live_Matches.py   # Live, Recent & Upcoming match center with 4-innings Test support
 ├── Pg2_Player_Stats.py   # Player profiles, career stats, recent form & H2H comparison
 ├── cricbuzz_api.py       # Cricbuzz RapidAPI client, caching, and data parsers
