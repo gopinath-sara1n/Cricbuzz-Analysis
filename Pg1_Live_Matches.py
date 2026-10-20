@@ -26,6 +26,7 @@ def render_innings_charts(inng):
         if bat_df is not None and not bat_df.empty:
             bat_active = bat_df[bat_df["Balls"] > 0].copy()
             if not bat_active.empty:
+                max_r = float(bat_active["Runs"].max()) if not bat_active["Runs"].empty else 10.0
                 fig_bat = px.bar(
                     bat_active,
                     x="Runs",
@@ -38,6 +39,7 @@ def render_innings_charts(inng):
                 )
                 fig_bat.update_layout(
                     yaxis={'categoryorder': 'total ascending'},
+                    xaxis=dict(rangemode="tozero", range=[0, max(10.0, max_r * 1.15)], title="Runs Scored"),
                     margin=dict(l=10, r=10, t=40, b=10),
                     height=320,
                     showlegend=False
@@ -49,6 +51,7 @@ def render_innings_charts(inng):
         if bowl_df is not None and not bowl_df.empty:
             bowl_active = bowl_df[bowl_df["Runs"] > 0].copy()
             if not bowl_active.empty:
+                max_w = float(bowl_active["Wickets"].max()) if not bowl_active["Wickets"].empty else 3.0
                 fig_bowl = px.bar(
                     bowl_active,
                     x="Bowler",
@@ -60,7 +63,8 @@ def render_innings_charts(inng):
                 )
                 fig_bowl.update_layout(
                     margin=dict(l=10, r=10, t=40, b=10),
-                    height=320
+                    height=320,
+                    yaxis=dict(rangemode="tozero", range=[0, max(3.0, max_w + 1.0)], title="Wickets Taken")
                 )
                 st.plotly_chart(fig_bowl, use_container_width=True)
 

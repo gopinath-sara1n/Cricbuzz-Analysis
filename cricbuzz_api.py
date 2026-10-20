@@ -348,6 +348,30 @@ def search_player_data(name, api_key=None):
         return pd.DataFrame()
 
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def fetch_player_image_bytes(player_id, face_image_id=None, api_key=None):
+    """
+    Fetch player headshot image bytes directly from Cricbuzz RapidAPI.
+    Returns binary image content to bypass browser 401/hotlink restrictions.
+    """
+    headers = get_headers(api_key)
+    candidate_ids = []
+    if player_id:
+        candidate_ids.append(str(player_id))
+    if face_image_id and str(face_image_id) not in candidate_ids:
+        candidate_ids.append(str(face_image_id))
+
+    for cid in candidate_ids:
+        url = f"https://cricbuzz-cricket.p.rapidapi.com/img/v1/i1/c{cid}/i.jpg"
+        try:
+            resp = requests.get(url, headers=headers, timeout=6)
+            if resp.status_code == 200 and len(resp.content) > 200:
+                return resp.content
+        except Exception:
+            continue
+    return None
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_player_info(player_id, api_key=None):
     """Fetch personal details, rankings, bio, recent form for player"""

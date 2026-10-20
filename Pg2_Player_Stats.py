@@ -11,7 +11,8 @@ from cricbuzz_api import (
     search_player_data,
     fetch_player_info,
     fetch_player_batting_stats,
-    fetch_player_bowling_stats
+    fetch_player_bowling_stats,
+    fetch_player_image_bytes
 )
 
 FEATURED_PLAYERS = {
@@ -41,11 +42,19 @@ def render_player_header(player_id, info):
     """Render player photo, key bio details, and ICC rankings."""
     c_img, c_details, c_rank = st.columns([1, 2.2, 1.3])
 
-    # Player Headshot
+    # Player Headshot from RapidAPI binary endpoint
     with c_img:
-        face_id = info.get("faceImageId") or player_id
-        img_url = f"https://images.cricbuzz.com/stats/img/faceImages/{face_id}.jpg"
-        st.image(img_url, caption=info.get("name", "Player"), width=160)
+        face_id = info.get("faceImageId")
+        img_bytes = fetch_player_image_bytes(player_id, face_image_id=face_id)
+        if img_bytes:
+            st.image(img_bytes, caption=info.get("name", "Player"), width=160)
+        else:
+            st.markdown("""
+                <div style="width: 150px; height: 165px; background-color: rgba(255,255,255,0.06); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 3.5rem;">
+                    👤
+                </div>
+            """, unsafe_allow_html=True)
+            st.caption(info.get("name", "Player"))
 
     # Core Profile
     with c_details:
@@ -90,7 +99,13 @@ def render_player_header(player_id, info):
 
 
 def render_batting_section(bat_df, player_name):
-    """Render structured career batting statistics and comparison charts."""
+    """
+    Render structured career batting statistics and separate comparison charts:
+    - Standalone Runs Chart
+    - Standalone 100s Chart
+    - Standalone 50s Chart
+    All with base value starting at zero and no negative axes.
+    """
     if bat_df.empty:
         st.info("No batting records found for this player.")
         return
@@ -98,72 +113,135 @@ def render_batting_section(bat_df, player_name):
     st.markdown("### 🏏 Career Batting Statistics")
     st.dataframe(bat_df, use_container_width=True)
 
-    # Batting Visualizations
+    # Formats to display
     formats = ["Test", "ODI", "T20", "IPL"]
     valid_formats = [f for f in formats if f in bat_df.columns]
 
-    if valid_formats:
-        c1, c2 = st.columns(2)
+    if not valid_formats:
+        return
 
-        # 1. Total Runs by Format
-        with c1:
-            if "Runs" in bat_df.index:
-                runs_series = []
-                for f in valid_formats:
-                    raw_val = str(bat_df.loc["Runs", f]).replace(",", "")
-                    try:
-                        runs_series.append(float(raw_val))
-                    except ValueError:
-                        runs_series.append(0.0)
+    st.markdown("---")
+    st.markdown("### 📊 Career Batting Visualizations")
 
-                chart_df = pd.DataFrame({"Format": valid_formats, "Runs": runs_series})
-                fig_runs = px.bar(
-                    chart_df,
-                    x="Format",
-                    y="Runs",
-                    text="Runs",
-                    color="Format",
-                    title=f"🏏 Total Runs by Format - {player_name}",
-                    color_discrete_sequence=px.colors.qualitative.Pastel
-                )
-                fig_runs.update_traces(textposition='outside')
-                fig_runs.update_layout(height=320, showlegend=False)
-                st.plotly_chart(fig_runs, use_container_width=True)
+    # 1. STANDALONE CAREER RUNS CHART
+    if "Runs" in bat_df.index:
+        runs_series = []
+        for f in valid_formats:
+            raw_val = str(bat_df.loc["Runs", f]).replace(",", "")
+            try:
+                val = max(0.0, float(raw_val))
+            except ValueError:
+                val = 0.0
+            runs_series.append(val)
 
-        # 2. Centuries & Fifties
-        with c2:
-            if "100s" in bat_df.index and "50s" in bat_df.index:
-                c_100s = []
-                c_50s = []
-                for f in valid_formats:
-                    try:
-                        c_100s.append(int(bat_df.loc["100s", f]))
-                    except (ValueError, TypeError):
-                        c_100s.append(0)
-                    try:
-                        c_50s.append(int(bat_df.loc["50s", f]))
-                    except (ValueError, TypeError):
-                        c_50s.append(0)
+        chart_runs_df = pd.DataFrame({"Format": valid_formats, "Runs": runs_series})
+        max_runs = max(runs_series) if runs_series else 100.0
 
-                milestone_df = pd.DataFrame({
-                    "Format": valid_formats,
-                    "Centuries (100s)": c_100s,
-                    "Half-Centuries (50s)": c_50s
-                })
-                fig_milestones = px.bar(
-                    milestone_df,
-                    x="Format",
-                    y=["Centuries (100s)", "Half-Centuries (50s)"],
-                    barmode="group",
-                    title="💯 100s and 50s by Format",
-                    color_discrete_sequence=["#e63946", "#457b9d"]
-                )
-                fig_milestones.update_layout(height=320)
-                st.plotly_chart(fig_milestones, use_container_width=True)
+        fig_runs = px.bar(
+            chart_runs_df,
+            x="Format",
+            y="Runs",
+            text="Runs",
+            color="Format",
+            title=f"🏏 Total Career Runs by Format - {player_name}",
+            color_discrete_sequence=["#2a9d8f", "#264653", "#e76f51", "#f4a261"]
+        )
+        fig_runs.update_traces(textposition='outside', texttemplate='%{text:,.0f}')
+        fig_runs.update_layout(
+            height=350,
+            showlegend=False,
+            yaxis=dict(
+                rangemode="tozero",
+                range=[0, max_runs * 1.18 if max_runs > 0 else 100.0],
+                title="Total Runs"
+            ),
+            xaxis=dict(title="Format"),
+            margin=dict(l=20, r=20, t=50, b=20)
+        )
+        st.plotly_chart(fig_runs, use_container_width=True)
+
+    # 2 & 3. SEPARATE CHARTS FOR 100s AND 50s
+    if "100s" in bat_df.index and "50s" in bat_df.index:
+        c_100s = []
+        c_50s = []
+        for f in valid_formats:
+            try:
+                c_100s.append(max(0, int(bat_df.loc["100s", f])))
+            except (ValueError, TypeError):
+                c_100s.append(0)
+            try:
+                c_50s.append(max(0, int(bat_df.loc["50s", f])))
+            except (ValueError, TypeError):
+                c_50s.append(0)
+
+        col_100s, col_50s = st.columns(2)
+
+        # Standalone Centuries (100s) Chart
+        with col_100s:
+            df_100s = pd.DataFrame({
+                "Format": valid_formats,
+                "Centuries (100s)": c_100s
+            })
+            max_100 = max(c_100s) if c_100s else 5
+            fig_100s = px.bar(
+                df_100s,
+                x="Format",
+                y="Centuries (100s)",
+                text="Centuries (100s)",
+                color="Format",
+                title=f"💯 Centuries (100s) by Format - {player_name}",
+                color_discrete_sequence=["#d90429", "#ef233c", "#b7094c", "#890620"]
+            )
+            fig_100s.update_traces(textposition='outside')
+            fig_100s.update_layout(
+                height=340,
+                showlegend=False,
+                yaxis=dict(
+                    rangemode="tozero",
+                    range=[0, max(5, int(max_100 * 1.25))],
+                    title="Centuries (100s) Count"
+                ),
+                xaxis=dict(title="Format"),
+                margin=dict(l=20, r=20, t=50, b=20)
+            )
+            st.plotly_chart(fig_100s, use_container_width=True)
+
+        # Standalone Half-Centuries (50s) Chart
+        with col_50s:
+            df_50s = pd.DataFrame({
+                "Format": valid_formats,
+                "Half-Centuries (50s)": c_50s
+            })
+            max_50 = max(c_50s) if c_50s else 5
+            fig_50s = px.bar(
+                df_50s,
+                x="Format",
+                y="Half-Centuries (50s)",
+                text="Half-Centuries (50s)",
+                color="Format",
+                title=f"⭐ Half-Centuries (50s) by Format - {player_name}",
+                color_discrete_sequence=["#f77f00", "#fcbf49", "#e76f51", "#f4a261"]
+            )
+            fig_50s.update_traces(textposition='outside')
+            fig_50s.update_layout(
+                height=340,
+                showlegend=False,
+                yaxis=dict(
+                    rangemode="tozero",
+                    range=[0, max(5, int(max_50 * 1.22))],
+                    title="Half-Centuries (50s) Count"
+                ),
+                xaxis=dict(title="Format"),
+                margin=dict(l=20, r=20, t=50, b=20)
+            )
+            st.plotly_chart(fig_50s, use_container_width=True)
 
 
 def render_bowling_section(bowl_df, player_name):
-    """Render structured career bowling statistics and comparison charts."""
+    """
+    Render structured career bowling statistics and comparison charts.
+    All charts guaranteed base value starting at zero with no negative axes.
+    """
     if bowl_df.empty:
         st.info("No bowling records found for this player.")
         return
@@ -177,16 +255,17 @@ def render_bowling_section(bowl_df, player_name):
     if valid_formats and "Wickets" in bowl_df.index:
         c1, c2 = st.columns(2)
 
-        # 1. Total Wickets
+        # 1. Total Wickets Chart
         with c1:
             wkts_series = []
             for f in valid_formats:
                 raw_val = str(bowl_df.loc["Wickets", f]).replace(",", "")
                 try:
-                    wkts_series.append(float(raw_val))
+                    wkts_series.append(max(0.0, float(raw_val)))
                 except ValueError:
                     wkts_series.append(0.0)
 
+            max_wkts = max(wkts_series) if wkts_series else 10.0
             chart_df = pd.DataFrame({"Format": valid_formats, "Wickets": wkts_series})
             fig_wkts = px.bar(
                 chart_df,
@@ -197,29 +276,53 @@ def render_bowling_section(bowl_df, player_name):
                 title=f"🎯 Total Wickets by Format - {player_name}",
                 color_discrete_sequence=px.colors.qualitative.Prism
             )
-            fig_wkts.update_traces(textposition='outside')
-            fig_wkts.update_layout(height=320, showlegend=False)
+            fig_wkts.update_traces(textposition='outside', texttemplate='%{text:,.0f}')
+            fig_wkts.update_layout(
+                height=340,
+                showlegend=False,
+                yaxis=dict(
+                    rangemode="tozero",
+                    range=[0, max(5.0, max_wkts * 1.2)],
+                    title="Wickets Taken"
+                ),
+                xaxis=dict(title="Format"),
+                margin=dict(l=20, r=20, t=50, b=20)
+            )
             st.plotly_chart(fig_wkts, use_container_width=True)
 
-        # 2. Economy Rates
+        # 2. Economy Rates Chart
         with c2:
             if "Economy" in bowl_df.index:
                 econ_series = []
                 for f in valid_formats:
                     try:
-                        econ_series.append(float(bowl_df.loc["Economy", f]))
+                        econ_series.append(max(0.0, float(bowl_df.loc["Economy", f])))
                     except (ValueError, TypeError):
                         econ_series.append(0.0)
 
+                max_econ = max(econ_series) if econ_series else 6.0
                 econ_df = pd.DataFrame({"Format": valid_formats, "Economy": econ_series})
-                fig_econ = px.line(
+                fig_econ = px.bar(
                     econ_df,
                     x="Format",
                     y="Economy",
-                    markers=True,
-                    title="📉 Bowling Economy Rate by Format",
+                    text="Economy",
+                    color="Format",
+                    title=f"📉 Bowling Economy Rate by Format - {player_name}",
+                    color_discrete_sequence=px.colors.qualitative.Safe
                 )
-                fig_econ.update_layout(height=320)
+                fig_econ.update_traces(textposition='outside', texttemplate='%{text:.2f}')
+                fig_econ.update_layout(
+                    height=340,
+                    showlegend=False,
+                    yaxis=dict(
+                        rangemode="tozero",
+                        range=[0, max(6.0, max_econ * 1.25)],
+                        title="Economy (Runs / Over)"
+                    ),
+                    xaxis=dict(title="Format"),
+                    margin=dict(l=20, r=20, t=50, b=20)
+                )
                 st.plotly_chart(fig_econ, use_container_width=True)
 
 
@@ -268,7 +371,7 @@ def render_recent_form(info):
 
 
 def render_comparison_tool():
-    """Head-to-head comparison tool for two players."""
+    """Head-to-head comparison tool for two players with photos and zero-base charts."""
     st.markdown("### ⚔️ Player Head-to-Head Comparison")
     st.write("Compare two cricket legends across Test, ODI, T20, and IPL formats.")
 
@@ -312,12 +415,18 @@ def render_comparison_tool():
             p1_info = fetch_player_info(p1_id)
             p2_info = fetch_player_info(p2_id)
 
-        # Profile Cards
+        # Profile Cards with Headshots
         c1, c2 = st.columns(2)
         with c1:
+            p1_img = fetch_player_image_bytes(p1_id, face_image_id=p1_info.get("faceImageId"))
+            if p1_img:
+                st.image(p1_img, width=120)
             st.markdown(f"#### 🛡️ {p1_name}")
             st.caption(f"Role: {p1_info.get('role', 'N/A')} | Country: {p1_info.get('intlTeam', 'N/A')}")
         with c2:
+            p2_img = fetch_player_image_bytes(p2_id, face_image_id=p2_info.get("faceImageId"))
+            if p2_img:
+                st.image(p2_img, width=120)
             st.markdown(f"#### ⚔️ {p2_name}")
             st.caption(f"Role: {p2_info.get('role', 'N/A')} | Country: {p2_info.get('intlTeam', 'N/A')}")
 
@@ -340,28 +449,30 @@ def render_comparison_tool():
         })
         st.table(cmp_table.set_index("Metric"))
 
-        # Comparison Bar Chart
+        # Comparison Bar Chart with zero base
         chart_metrics = ["Runs", "100s", "50s"]
         c_p1_nums = []
         c_p2_nums = []
         for m in chart_metrics:
             try:
-                c_p1_nums.append(float(str(p1_bat.loc[m, comp_format]).replace(",", "")))
+                c_p1_nums.append(max(0.0, float(str(p1_bat.loc[m, comp_format]).replace(",", ""))))
             except Exception:
                 c_p1_nums.append(0.0)
             try:
-                c_p2_nums.append(float(str(p2_bat.loc[m, comp_format]).replace(",", "")))
+                c_p2_nums.append(max(0.0, float(str(p2_bat.loc[m, comp_format]).replace(",", ""))))
             except Exception:
                 c_p2_nums.append(0.0)
 
         fig_cmp = go.Figure(data=[
-            go.Bar(name=p1_name, x=chart_metrics, y=c_p1_nums, marker_color="#1d3557"),
-            go.Bar(name=p2_name, x=chart_metrics, y=c_p2_nums, marker_color="#e63946")
+            go.Bar(name=p1_name, x=chart_metrics, y=c_p1_nums, marker_color="#1d3557", text=c_p1_nums, textposition='outside'),
+            go.Bar(name=p2_name, x=chart_metrics, y=c_p2_nums, marker_color="#e63946", text=c_p2_nums, textposition='outside')
         ])
+        max_cmp = max(max(c_p1_nums), max(c_p2_nums), 10.0)
         fig_cmp.update_layout(
             barmode='group',
             title=f"{p1_name} vs {p2_name} in {comp_format} Cricket",
-            height=340
+            height=360,
+            yaxis=dict(rangemode="tozero", range=[0, max_cmp * 1.2], title="Count / Stat Value")
         )
         st.plotly_chart(fig_cmp, use_container_width=True)
 
