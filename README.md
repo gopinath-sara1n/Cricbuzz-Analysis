@@ -6,10 +6,9 @@ A modern, high-performance cricket analytics dashboard and match center built wi
 
 ## 🌐 Live Application
 
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://<YOUR-APP-URL>.streamlit.app)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://cricbuzz-analysis-fuzeeeljckfpfmhpa4zv2m.streamlit.app/)
 
-> 🔗 **Live App Link:** [https://<YOUR-APP-URL>.streamlit.app](https://<YOUR-APP-URL>.streamlit.app)  
-> *(Deploy to Streamlit Community Cloud with `app.py` as the main file path and paste your live URL here)*
+> 🔗 **Live App Link:** [https://cricbuzz-analysis-fuzeeeljckfpfmhpa4zv2m.streamlit.app/](https://cricbuzz-analysis-fuzeeeljckfpfmhpa4zv2m.streamlit.app/)
 
 ---
 
