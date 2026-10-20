@@ -4,6 +4,15 @@ A modern, high-performance cricket analytics dashboard and match center built wi
 
 ---
 
+## 🌐 Live Application
+
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://<YOUR-APP-URL>.streamlit.app)
+
+> 🔗 **Live App Link:** [https://<YOUR-APP-URL>.streamlit.app](https://<YOUR-APP-URL>.streamlit.app)  
+> *(Deploy to Streamlit Community Cloud with `app.py` as the main file path and paste your live URL here)*
+
+---
+
 ## 🌟 Key Features & Improvements
 
 ### 1. 🏏 Tailored 4-Innings Test Match Architecture
@@ -49,7 +58,7 @@ A modern, high-performance cricket analytics dashboard and match center built wi
 
 ```text
 Cricbuzz-Analysis/
-├── home.py               # Main application entrypoint with top-level tabs navigation ("📡 Live Matches", "👤 Player Stats")
+├── app.py                # Main application entrypoint with top-level tabs navigation ("📡 Live Matches", "👤 Player Stats")
 ├── Pg1_Live_Matches.py   # Live, Recent & Upcoming match center with 4-innings Test support
 ├── Pg2_Player_Stats.py   # Player profiles, career stats, recent form & H2H comparison
 ├── cricbuzz_api.py       # Cricbuzz RapidAPI client, caching, and data parsers
@@ -74,7 +83,7 @@ pip install -r requirements.txt
 
 ### 3. Run the Streamlit Application
 ```bash
-streamlit run home.py
+streamlit run app.py
 ```
 
 The app will open automatically in your browser at `http://localhost:8501`.
