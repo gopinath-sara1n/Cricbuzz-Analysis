@@ -8,7 +8,7 @@ A modern, high-performance cricket analytics dashboard and match center built wi
 
 [![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://cricbuzz-analysis-fuzeeeljckfpfmhpa4zv2m.streamlit.app/)
 
-> 🔗 **Live App Link:** [https://cricbuzz-analysis-fuzeeeljckfpfmhpa4zv2m.streamlit.app/](https://cricbuzz-analysis-fuzeeeljckfpfmhpa4zv2m.streamlit.app/)
+> 🔗 **Live App Link:** [Lie App]((https://cricbuzz-analysis-u5ryqnrknqvfraczr9btpb.streamlit.app/))
 
 ---
 
