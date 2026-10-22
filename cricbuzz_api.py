@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 import re
 
-DEFAULT_API_KEY = "cd436a9136msh7134d9e6d53e7a4p1ee911jsn476d453f0ea8"
+DEFAULT_API_KEY = "21d336251emsh719e8aa018de93cp1a5081jsn0f37acea4c73"
 API_HOST = "cricbuzz-cricket.p.rapidapi.com"
 
 
