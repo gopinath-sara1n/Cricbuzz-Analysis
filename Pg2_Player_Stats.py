@@ -12,11 +12,13 @@ from cricbuzz_api import (
     fetch_player_info,
     fetch_player_batting_stats,
     fetch_player_bowling_stats,
-    fetch_player_image_bytes
+    fetch_player_image_bytes,
+    get_player_image_url
 )
 
 FEATURED_PLAYERS = {
     "🇮🇳 Virat Kohli": "1413",
+    "🇦🇺 Usman Khawaja": "6635",
     "🏴󠁧󠁢󠁥󠁮󠁧󠁿 Joe Root": "8019",
     "🇦🇺 Steve Smith": "2250",
     "🇮🇳 Rohit Sharma": "576",
@@ -42,19 +44,24 @@ def render_player_header(player_id, info):
     """Render player photo, key bio details, and ICC rankings."""
     c_img, c_details, c_rank = st.columns([1, 2.2, 1.3])
 
-    # Player Headshot from RapidAPI binary endpoint
+    # Player Headshot from Cricbuzz CDN (https://static.cricbuzz.com/a/img/v1/i1/c{faceId}/{slug}.jpg?d=low&p=gthumb)
     with c_img:
+        p_name = info.get("name", "Player")
         face_id = info.get("faceImageId")
-        img_bytes = fetch_player_image_bytes(player_id, face_image_id=face_id)
+        img_bytes = fetch_player_image_bytes(p_name, face_id, player_id=player_id)
+        img_url = get_player_image_url(p_name, face_id)
+
         if img_bytes:
-            st.image(img_bytes, caption=info.get("name", "Player"), width=160)
+            st.image(img_bytes, caption=p_name, width=160)
+        elif img_url:
+            st.image(img_url, caption=p_name, width=160)
         else:
             st.markdown("""
                 <div style="width: 150px; height: 165px; background-color: rgba(255,255,255,0.06); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 3.5rem;">
                     👤
                 </div>
             """, unsafe_allow_html=True)
-            st.caption(info.get("name", "Player"))
+            st.caption(p_name)
 
     # Core Profile
     with c_details:
@@ -418,13 +425,15 @@ def render_comparison_tool():
         # Profile Cards with Headshots
         c1, c2 = st.columns(2)
         with c1:
-            p1_img = fetch_player_image_bytes(p1_id, face_image_id=p1_info.get("faceImageId"))
+            p1_face = p1_info.get("faceImageId")
+            p1_img = fetch_player_image_bytes(p1_name, p1_face, player_id=p1_id) or get_player_image_url(p1_name, p1_face)
             if p1_img:
                 st.image(p1_img, width=120)
             st.markdown(f"#### 🛡️ {p1_name}")
             st.caption(f"Role: {p1_info.get('role', 'N/A')} | Country: {p1_info.get('intlTeam', 'N/A')}")
         with c2:
-            p2_img = fetch_player_image_bytes(p2_id, face_image_id=p2_info.get("faceImageId"))
+            p2_face = p2_info.get("faceImageId")
+            p2_img = fetch_player_image_bytes(p2_name, p2_face, player_id=p2_id) or get_player_image_url(p2_name, p2_face)
             if p2_img:
                 st.image(p2_img, width=120)
             st.markdown(f"#### ⚔️ {p2_name}")
@@ -502,7 +511,7 @@ def app():
         # Search Bar
         search_query = st.text_input(
             "🔍 Search Player Name",
-            placeholder="Type player name (e.g. Jasprit Bumrah, Travis Head, Ben Stokes)..."
+            placeholder="Type player name (e.g. Usman Khawaja, Jasprit Bumrah, Travis Head, Ben Stokes)..."
         )
 
         player_id = None

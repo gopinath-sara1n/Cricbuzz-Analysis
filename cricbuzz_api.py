@@ -6,6 +6,7 @@ Supports Live, Recent, and Upcoming matches with full Test match (4 innings) par
 import requests
 import pandas as pd
 import streamlit as st
+import re
 
 DEFAULT_API_KEY = "cd436a9136msh7134d9e6d53e7a4p1ee911jsn476d453f0ea8"
 API_HOST = "cricbuzz-cricket.p.rapidapi.com"
@@ -322,6 +323,51 @@ def fetch_scorecard_data(match_id, api_key=None):
 # PLAYER STATS API
 # ==============================================================================
 
+def get_player_image_url(name, face_image_id):
+    """
+    Generate Cricbuzz official static CDN image URL.
+    Format: https://static.cricbuzz.com/a/img/v1/i1/c{faceImageId}/{slug}.jpg?d=low&p=gthumb
+    """
+    if not face_image_id:
+        return None
+    slug = re.sub(r'[^a-z0-9]+', '-', (name or 'player').lower()).strip('-') or 'player'
+    return f"https://static.cricbuzz.com/a/img/v1/i1/c{face_image_id}/{slug}.jpg?d=low&p=gthumb"
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def fetch_player_image_bytes(name, face_image_id, player_id=None, api_key=None):
+    """
+    Fetch player headshot image bytes directly from Cricbuzz's official static CDN,
+    with fallback to RapidAPI image endpoint.
+    """
+    # 1. Primary: Cricbuzz official static CDN
+    if face_image_id:
+        url = get_player_image_url(name, face_image_id)
+        browser_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        try:
+            resp = requests.get(url, headers=browser_headers, timeout=6)
+            if resp.status_code == 200 and len(resp.content) > 100:
+                return resp.content
+        except Exception:
+            pass
+
+    # 2. Fallback: RapidAPI image endpoint
+    headers = get_headers(api_key)
+    candidates = [c for c in [face_image_id, player_id] if c]
+    for cid in candidates:
+        try:
+            rapid_url = f"https://cricbuzz-cricket.p.rapidapi.com/img/v1/i1/c{cid}/i.jpg"
+            resp = requests.get(rapid_url, headers=headers, timeout=5)
+            if resp.status_code == 200 and len(resp.content) > 100:
+                return resp.content
+        except Exception:
+            continue
+
+    return None
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def search_player_data(name, api_key=None):
     """Search players by name keyword"""
@@ -346,30 +392,6 @@ def search_player_data(name, api_key=None):
         return pd.DataFrame(players)
     except Exception:
         return pd.DataFrame()
-
-
-@st.cache_data(ttl=86400, show_spinner=False)
-def fetch_player_image_bytes(player_id, face_image_id=None, api_key=None):
-    """
-    Fetch player headshot image bytes directly from Cricbuzz RapidAPI.
-    Returns binary image content to bypass browser 401/hotlink restrictions.
-    """
-    headers = get_headers(api_key)
-    candidate_ids = []
-    if player_id:
-        candidate_ids.append(str(player_id))
-    if face_image_id and str(face_image_id) not in candidate_ids:
-        candidate_ids.append(str(face_image_id))
-
-    for cid in candidate_ids:
-        url = f"https://cricbuzz-cricket.p.rapidapi.com/img/v1/i1/c{cid}/i.jpg"
-        try:
-            resp = requests.get(url, headers=headers, timeout=6)
-            if resp.status_code == 200 and len(resp.content) > 200:
-                return resp.content
-        except Exception:
-            continue
-    return None
 
 
 @st.cache_data(ttl=300, show_spinner=False)
