@@ -69,12 +69,8 @@ if "rapidapi_key" not in st.session_state:
 # ==============================================================================
 
 with st.sidebar:
-    st.markdown("""
-        <div class="sidebar-header">
-            <h2 style="margin: 0; color: #4CAF50;">🏏 Cricbuzz LiveStats</h2>
-            <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: #888;">Real-Time Cricket Intelligence</p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown("## 🏏 Cricbuzz LiveStats")
+    st.caption("Real-Time Cricket Intelligence")
 
     # API Settings Expander
     with st.expander("⚙️ API Configuration", expanded=False):
@@ -116,14 +112,8 @@ with st.sidebar:
 # TOP TITLE & MAIN TAB NAVIGATION
 # ==============================================================================
 
-st.markdown("""
-    <div style="margin-bottom: 10px;">
-        <h1 style="margin: 0; padding: 0;">🏏 Cricbuzz LiveStats Pro</h1>
-        <p style="color: #888; font-size: 1.05rem; margin-top: 4px;">
-            Real-Time Cricket Intelligence, 4-Innings Test Match Analytics & Player Statistics
-        </p>
-    </div>
-""", unsafe_allow_html=True)
+st.title("🏏 Cricbuzz LiveStats Pro")
+st.caption("Real-Time Cricket Intelligence, 4-Innings Test Match Analytics & Player Statistics")
 
 tab_live_matches, tab_player_stats = st.tabs([
     "📡 Live Matches",

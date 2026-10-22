@@ -108,7 +108,6 @@ def display_innings_tab(inng, index, total_innings):
     st.markdown("#### 🏏 Batting Scorecard")
     bat_df = inng.get("batting_df")
     if bat_df is not None and not bat_df.empty:
-        # Format highlight markers for 50s and 100s
         styled_bat = bat_df.copy()
         styled_bat["Runs"] = styled_bat["Runs"].apply(
             lambda r: f"💯 {r}" if r >= 100 else (f"⭐ {r}" if r >= 50 else str(r))
@@ -182,14 +181,7 @@ def display_innings_tab(inng, index, total_innings):
 
 
 def app():
-    st.markdown("""
-        <div style="margin-bottom: 20px;">
-            <h1 style="margin: 0; padding: 0;">📡 Live & Recent Cricket Matches</h1>
-            <p style="color: #6c757d; margin-top: 5px; font-size: 1.05rem;">
-                Real-time scores, multi-innings Test match analysis, and interactive full scorecards.
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
+    st.caption("Real-time scores, multi-innings Test match analysis, and interactive full scorecards.")
 
     # Top Filter Controls
     top_col1, top_col2, top_col3, top_col4 = st.columns([1.5, 1.2, 2, 0.8])
@@ -198,7 +190,7 @@ def app():
         match_category = st.radio(
             "Category",
             ["🔴 Live", "🏁 Recent", "📅 Upcoming"],
-            index=1,  # Default to Recent to guarantee completed Test matches with full 4 innings are viewable
+            index=1,
             horizontal=True
         )
         cat_key = "live" if "Live" in match_category else ("recent" if "Recent" in match_category else "upcoming")
@@ -268,20 +260,11 @@ def app():
 
     st.markdown("---")
 
-    # Match Overview Header Card
+    # Match Overview Header Card (Pure Native Streamlit elements - no raw HTML tags)
     with st.container():
-        # Badge line
-        fmt_badge_color = "#b22222" if is_test_match else ("#0077b6" if selected_match["match_format"] == "ODI" else "#6a0dad")
-        test_badge_html = f"""
-            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
-                <span style="background-color: {fmt_badge_color}; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 0.85rem;">
-                    {selected_match['match_format']} MATCH
-                </span>
-                {'<span style="background-color: #2e7d32; color: white; padding: 4px 12px; border-radius: 20px; font-weight: bold; font-size: 0.85rem;">🏏 4-Innings Test Architecture</span>' if is_test_match else ''}
-                <span style="color: #6c757d; font-size: 0.9rem;">📍 {selected_match['venue']} | 🗓️ {selected_match['start_date']}</span>
-            </div>
-        """
-        st.markdown(test_badge_html, unsafe_allow_html=True)
+        test_badge = " `🏏 4-Innings Test Architecture`" if is_test_match else ""
+        st.markdown(f"### `{selected_match['match_format']} MATCH`{test_badge}")
+        st.caption(f"📍 **Venue:** {selected_match['venue']} | 🗓️ **Date:** {selected_match['start_date']}")
         st.subheader(f"{selected_match['series_name']} — {selected_match['match_desc']}")
 
         # Scores Display
@@ -290,18 +273,14 @@ def app():
         with c_t1:
             st.markdown(f"### 🛡️ {selected_match['team1_name']} ({selected_match['team1_short']})")
             if is_test_match:
-                t1_i1 = selected_match.get("team1_inngs1", {})
-                t1_i2 = selected_match.get("team1_inngs2", {})
-                s1_str = f"{t1_i1.get('runs', 0)}/{t1_i1.get('wickets', 0)} ({format_overs(t1_i1.get('overs'))} ov)" if t1_i1 else "Yet to bat"
-                s2_str = f"{t1_i2.get('runs', 0)}/{t1_i2.get('wickets', 0)} ({format_overs(t1_i2.get('overs'))} ov)" if t1_i2 else "Yet to bat"
-                
-                st.markdown(f"""
-                    <div style="background-color: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; border-left: 4px solid #4CAF50;">
-                        <div><b>1st Innings:</b> {s1_str}</div>
-                        <div style="margin-top: 4px;"><b>2nd Innings:</b> {s2_str}</div>
-                        <div style="margin-top: 6px; font-size: 1.15rem; font-weight: bold; color: #4CAF50;">Combined: {selected_match['team1_score']}</div>
-                    </div>
-                """, unsafe_allow_html=True)
+                with st.container(border=True):
+                    t1_i1 = selected_match.get("team1_inngs1", {})
+                    t1_i2 = selected_match.get("team1_inngs2", {})
+                    s1_str = f"{t1_i1.get('runs', 0)}/{t1_i1.get('wickets', 0)} ({format_overs(t1_i1.get('overs'))} ov)" if t1_i1 else "Yet to bat"
+                    s2_str = f"{t1_i2.get('runs', 0)}/{t1_i2.get('wickets', 0)} ({format_overs(t1_i2.get('overs'))} ov)" if t1_i2 else "Yet to bat"
+                    st.markdown(f"**1st Innings:** `{s1_str}`")
+                    st.markdown(f"**2nd Innings:** `{s2_str}`")
+                    st.metric("Combined Score", selected_match["team1_score"])
             else:
                 st.metric(
                     label=selected_match["team1_name"],
@@ -311,18 +290,14 @@ def app():
         with c_t2:
             st.markdown(f"### ⚔️ {selected_match['team2_name']} ({selected_match['team2_short']})")
             if is_test_match:
-                t2_i1 = selected_match.get("team2_inngs1", {})
-                t2_i2 = selected_match.get("team2_inngs2", {})
-                s1_str = f"{t2_i1.get('runs', 0)}/{t2_i1.get('wickets', 0)} ({format_overs(t2_i1.get('overs'))} ov)" if t2_i1 else "Yet to bat"
-                s2_str = f"{t2_i2.get('runs', 0)}/{t2_i2.get('wickets', 0)} ({format_overs(t2_i2.get('overs'))} ov)" if t2_i2 else "Yet to bat"
-
-                st.markdown(f"""
-                    <div style="background-color: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; border-left: 4px solid #2196F3;">
-                        <div><b>1st Innings:</b> {s1_str}</div>
-                        <div style="margin-top: 4px;"><b>2nd Innings:</b> {s2_str}</div>
-                        <div style="margin-top: 6px; font-size: 1.15rem; font-weight: bold; color: #2196F3;">Combined: {selected_match['team2_score']}</div>
-                    </div>
-                """, unsafe_allow_html=True)
+                with st.container(border=True):
+                    t2_i1 = selected_match.get("team2_inngs1", {})
+                    t2_i2 = selected_match.get("team2_inngs2", {})
+                    s1_str = f"{t2_i1.get('runs', 0)}/{t2_i1.get('wickets', 0)} ({format_overs(t2_i1.get('overs'))} ov)" if t2_i1 else "Yet to bat"
+                    s2_str = f"{t2_i2.get('runs', 0)}/{t2_i2.get('wickets', 0)} ({format_overs(t2_i2.get('overs'))} ov)" if t2_i2 else "Yet to bat"
+                    st.markdown(f"**1st Innings:** `{s1_str}`")
+                    st.markdown(f"**2nd Innings:** `{s2_str}`")
+                    st.metric("Combined Score", selected_match["team2_score"])
             else:
                 st.metric(
                     label=selected_match["team2_name"],
