@@ -95,6 +95,7 @@ with st.sidebar:
         <div class="feature-card">
             <b>✨ Key Features:</b>
             <ul style="margin: 6px 0 0 0; padding-left: 20px;">
+                <li><b>Official Team & Player Logos:</b> High-resolution Cricbuzz CDN graphics</li>
                 <li><b>4-Innings Test Architecture:</b> Full support for Test matches across all 4 innings</li>
                 <li><b>Live, Recent & Upcoming:</b> Real-time scores and completed scorecards</li>
                 <li><b>Interactive Scorecards:</b> Batsmen, Bowlers, Fall of Wickets & Partnerships</li>

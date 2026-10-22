@@ -166,12 +166,16 @@ def fetch_matches_data(category="live", api_key=None):
                     "venue": full_venue,
                     "team1_name": team1.get("teamName", "Team 1"),
                     "team1_short": team1.get("teamSName", "T1"),
+                    "team1_id": team1.get("teamId"),
+                    "team1_image_id": team1.get("imageId"),
                     "team1_score": team1_score_str,
                     "team1_inngs1": t1_i1,
                     "team1_inngs2": t1_i2,
                     "team1_total_runs": t1_total_runs,
                     "team2_name": team2.get("teamName", "Team 2"),
                     "team2_short": team2.get("teamSName", "T2"),
+                    "team2_id": team2.get("teamId"),
+                    "team2_image_id": team2.get("imageId"),
                     "team2_score": team2_score_str,
                     "team2_inngs1": t2_i1,
                     "team2_inngs2": t2_i2,
@@ -317,6 +321,174 @@ def fetch_scorecard_data(match_id, api_key=None):
         "match_complete": is_match_complete,
         "status": status_msg
     }
+
+
+# ==============================================================================
+# TEAM LOGO API (Cricbuzz Official Static CDN)
+# Reference: https://static.cricbuzz.com/a/img/v1/0x0/i1/c776333/new-zealand.jpg
+# ==============================================================================
+
+KNOWN_TEAM_IMAGE_IDS = {
+    # International Teams
+    "india": 776162, "ind": 776162,
+    "afghanistan": 776177, "afg": 776177,
+    "united states of america": 776186, "united states": 776186, "usa": 776186,
+    "west indies": 776191, "wi": 776191,
+    "zimbabwe": 776198, "zim": 776198,
+    "australia": 776202, "aus": 776202,
+    "bangladesh": 776210, "ban": 776210,
+    "belgium": 776219,
+    "bermuda": 776221,
+    "botswana": 776225,
+    "canada": 776227, "can": 776227,
+    "vanuatu": 776229,
+    "denmark": 776232, "den": 776232,
+    "uganda": 776233, "uga": 776233,
+    "england": 776237, "eng": 776237,
+    "united arab emirates": 776242, "uae": 776242,
+    "fiji": 776251,
+    "sri lanka": 776254, "sl": 776254,
+    "germany": 776260, "ger": 776260,
+    "hong kong china": 776271, "hong kong": 776271, "hk": 776271,
+    "singapore": 776275, "sin": 776275,
+    "scotland": 776280, "sco": 776280,
+    "iran": 776282,
+    "south africa": 776287, "sa": 776287, "rsa": 776287,
+    "italy": 776295, "ita": 776295,
+    "jersey": 776300,
+    "kenya": 776303, "ken": 776303,
+    "papua new guinea": 776304, "png": 776304,
+    "pakistan": 776308, "pak": 776308,
+    "kuwait": 776312, "kuw": 776312,
+    "malaysia": 776319, "mas": 776319,
+    "namibia": 776326, "nam": 776326,
+    "oman": 776328, "oma": 776328,
+    "nepal": 776331, "nep": 776331,
+    "new zealand": 776333, "nz": 776333,
+    "netherlands": 776335, "ned": 776335,
+    "ireland": 839366, "ire": 839366,
+
+    # IPL Teams
+    "chennai super kings": 860038, "csk": 860038,
+    "delhi capitals": 860040, "dc": 860040,
+    "kolkata knight riders": 860046, "kkr": 860046,
+    "mumbai indians": 860053, "mi": 860053,
+    "rajasthan royals": 860055, "rr": 860055,
+    "royal challengers bengaluru": 860056, "royal challengers bangalore": 860056, "rcb": 860056,
+    "sunrisers hyderabad": 860066, "srh": 860066,
+    "gujarat titans": 860068, "gt": 860068,
+    "punjab kings": 860084, "pbks": 860084,
+    "lucknow super giants": 882545, "lsg": 882545,
+
+    # BBL Teams
+    "adelaide strikers": 824977,
+    "brisbane heat": 824979,
+    "hobart hurricanes": 824981,
+    "perth scorchers": 824983,
+    "melbourne renegades": 824985,
+    "melbourne stars": 824987,
+    "sydney sixers": 824989,
+    "sydney thunder": 824991,
+
+    # PSL Teams
+    "multan sultans": 883178,
+    "peshawar zalmi": 883180,
+    "lahore qalandars": 883181,
+    "quetta gladiators": 883182,
+    "islamabad united": 883184,
+    "karachi kings": 883188,
+
+    # SA20 & Major League Cricket Teams
+    "mi cape town": 831132,
+    "joburg super kings": 831131,
+    "durbans super giants": 831130,
+    "paarl royals": 831135,
+    "pretoria capitals": 831133,
+    "sunrisers eastern cape": 831134,
+    "washington freedom": 825012,
+    "mi new york": 825028,
+    "san francisco unicorns": 825029,
+    "seattle orcas": 825030,
+    "texas super kings": 825031,
+    "los angeles knight riders": 825025
+}
+
+
+def resolve_team_image_id(team_name, image_id=None):
+    """
+    Resolve Cricbuzz image ID for a team name, short name, or explicit image ID.
+    """
+    if image_id:
+        return image_id
+    if not team_name:
+        return None
+
+    raw = str(team_name).lower().strip()
+    clean = re.sub(r'[^a-z0-9 ]+', '', raw).strip()
+    slug = re.sub(r'[^a-z0-9]+', '-', raw).strip('-')
+
+    # 1. Exact match
+    res = (
+        KNOWN_TEAM_IMAGE_IDS.get(raw) or
+        KNOWN_TEAM_IMAGE_IDS.get(clean) or
+        KNOWN_TEAM_IMAGE_IDS.get(slug)
+    )
+    if res:
+        return res
+
+    # 2. Substring match (e.g. "Pakistan Women", "Team India", "Australia XI")
+    for key, val in KNOWN_TEAM_IMAGE_IDS.items():
+        if len(key) >= 4 and key in raw:
+            return val
+
+    return None
+
+
+def get_team_logo_url(team_name, image_id=None):
+    """
+    Generate Cricbuzz official static CDN team logo URL.
+    Format: https://static.cricbuzz.com/a/img/v1/0x0/i1/c{imageId}/{slug}.jpg
+    Reference: https://static.cricbuzz.com/a/img/v1/0x0/i1/c776333/new-zealand.jpg
+    """
+    img_id = resolve_team_image_id(team_name, image_id)
+    if not img_id:
+        return None
+    slug = re.sub(r'[^a-z0-9]+', '-', (team_name or 'team').lower()).strip('-') or 'team'
+    return f"https://static.cricbuzz.com/a/img/v1/0x0/i1/c{img_id}/{slug}.jpg"
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def fetch_team_logo_bytes(team_name, image_id=None, api_key=None):
+    """
+    Fetch team logo image bytes directly from Cricbuzz's official static CDN,
+    with fallback to RapidAPI image endpoint.
+    Reference: https://static.cricbuzz.com/a/img/v1/0x0/i1/c776333/new-zealand.jpg
+    """
+    url = get_team_logo_url(team_name, image_id)
+    if url:
+        browser_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+        try:
+            resp = requests.get(url, headers=browser_headers, timeout=6)
+            if resp.status_code == 200 and len(resp.content) > 100:
+                return resp.content
+        except Exception:
+            pass
+
+    # Fallback to RapidAPI image endpoint if image_id is available
+    img_id = resolve_team_image_id(team_name, image_id)
+    if img_id:
+        headers = get_headers(api_key)
+        try:
+            rapid_url = f"https://cricbuzz-cricket.p.rapidapi.com/img/v1/i1/c{img_id}/i.jpg"
+            resp = requests.get(rapid_url, headers=headers, timeout=5)
+            if resp.status_code == 200 and len(resp.content) > 100:
+                return resp.content
+        except Exception:
+            pass
+
+    return None
 
 
 # ==============================================================================

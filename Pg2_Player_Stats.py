@@ -13,7 +13,9 @@ from cricbuzz_api import (
     fetch_player_batting_stats,
     fetch_player_bowling_stats,
     fetch_player_image_bytes,
-    get_player_image_url
+    get_player_image_url,
+    get_team_logo_url,
+    fetch_team_logo_bytes
 )
 
 FEATURED_PLAYERS = {
@@ -62,7 +64,15 @@ def render_player_header(player_id, info):
     # Core Profile
     with c_details:
         st.markdown(f"## {info.get('fullName') or info.get('name', 'Player Profile')}")
-        st.markdown(f"**National Team:** `{info.get('intlTeam', 'N/A')}` | **Role:** `{info.get('role', 'N/A')}`")
+        intl_team = info.get('intlTeam', 'N/A')
+        team_logo = fetch_team_logo_bytes(intl_team) or get_team_logo_url(intl_team)
+        col_tl, col_ti = st.columns([1, 6])
+        with col_tl:
+            if team_logo:
+                st.image(team_logo, width=44)
+        with col_ti:
+            st.markdown(f"**National Team:** `{intl_team}`")
+            st.caption(f"Role: {info.get('role', 'N/A')}")
         st.markdown(f"🏏 **Batting Style:** {info.get('bat', 'N/A')}")
         st.markdown(f"🎯 **Bowling Style:** {info.get('bowl', 'N/A')}")
         st.markdown(f"🎂 **Born:** {info.get('DoB', 'N/A')} ({info.get('birthPlace', 'N/A')})")
@@ -370,22 +380,41 @@ def render_comparison_tool():
             p1_info = fetch_player_info(p1_id)
             p2_info = fetch_player_info(p2_id)
 
-        # Profile Cards with Headshots
+        # Profile Cards with Headshots & Country Logos
         c1, c2 = st.columns(2)
         with c1:
             p1_face = p1_info.get("faceImageId")
             p1_img = fetch_player_image_bytes(p1_name, p1_face, player_id=p1_id) or get_player_image_url(p1_name, p1_face)
-            if p1_img:
-                st.image(p1_img, width=120)
+            p1_country = p1_info.get('intlTeam', '')
+            p1_tlogo = fetch_team_logo_bytes(p1_country) or get_team_logo_url(p1_country)
+
+            cp1_img, cp1_logo = st.columns([2, 1])
+            with cp1_img:
+                if p1_img:
+                    st.image(p1_img, width=120)
+            with cp1_logo:
+                if p1_tlogo:
+                    st.image(p1_tlogo, width=54)
+
             st.markdown(f"#### 🛡️ {p1_name}")
-            st.caption(f"Role: {p1_info.get('role', 'N/A')} | Country: {p1_info.get('intlTeam', 'N/A')}")
+            st.caption(f"Role: {p1_info.get('role', 'N/A')} | Country: {p1_country or 'N/A'}")
+
         with c2:
             p2_face = p2_info.get("faceImageId")
             p2_img = fetch_player_image_bytes(p2_name, p2_face, player_id=p2_id) or get_player_image_url(p2_name, p2_face)
-            if p2_img:
-                st.image(p2_img, width=120)
+            p2_country = p2_info.get('intlTeam', '')
+            p2_tlogo = fetch_team_logo_bytes(p2_country) or get_team_logo_url(p2_country)
+
+            cp2_img, cp2_logo = st.columns([2, 1])
+            with cp2_img:
+                if p2_img:
+                    st.image(p2_img, width=120)
+            with cp2_logo:
+                if p2_tlogo:
+                    st.image(p2_tlogo, width=54)
+
             st.markdown(f"#### ⚔️ {p2_name}")
-            st.caption(f"Role: {p2_info.get('role', 'N/A')} | Country: {p2_info.get('intlTeam', 'N/A')}")
+            st.caption(f"Role: {p2_info.get('role', 'N/A')} | Country: {p2_country or 'N/A'}")
 
         st.markdown(f"#### 📊 {comp_format} Batting Head-to-Head Table")
 

@@ -10,7 +10,9 @@ import plotly.graph_objects as go
 from cricbuzz_api import (
     fetch_matches_data,
     fetch_scorecard_data,
-    format_overs
+    format_overs,
+    get_team_logo_url,
+    fetch_team_logo_bytes
 )
 
 
@@ -79,6 +81,15 @@ def display_innings_tab(inng, index, total_innings):
     declared = inng.get("is_declared", False)
     follow_on = inng.get("is_follow_on", False)
     extras = inng.get("extras", {})
+
+    # Innings Team Logo & Header
+    col_tb_logo, col_tb_txt = st.columns([1, 8])
+    with col_tb_logo:
+        inng_logo = fetch_team_logo_bytes(bat_team) or get_team_logo_url(bat_team)
+        if inng_logo:
+            st.image(inng_logo, width=54)
+    with col_tb_txt:
+        st.markdown(f"### {bat_team} — Innings {index} of {total_innings}")
 
     # Innings Header Badges
     status_tags = []
@@ -271,7 +282,17 @@ def app():
         c_t1, c_t2 = st.columns(2)
 
         with c_t1:
-            st.markdown(f"### 🛡️ {selected_match['team1_name']} ({selected_match['team1_short']})")
+            col_l1, col_h1 = st.columns([1, 4])
+            with col_l1:
+                t1_logo = fetch_team_logo_bytes(selected_match["team1_name"], selected_match.get("team1_image_id")) or get_team_logo_url(selected_match["team1_name"], selected_match.get("team1_image_id"))
+                if t1_logo:
+                    st.image(t1_logo, width=64)
+                else:
+                    st.markdown("### 🛡️")
+            with col_h1:
+                st.markdown(f"### {selected_match['team1_name']}")
+                st.caption(f"Code: `{selected_match['team1_short']}`")
+
             if is_test_match:
                 with st.container(border=True):
                     t1_i1 = selected_match.get("team1_inngs1", {})
@@ -283,12 +304,22 @@ def app():
                     st.metric("Combined Score", selected_match["team1_score"])
             else:
                 st.metric(
-                    label=selected_match["team1_name"],
+                    label=f"{selected_match['team1_name']} Score",
                     value=selected_match["team1_score"]
                 )
 
         with c_t2:
-            st.markdown(f"### ⚔️ {selected_match['team2_name']} ({selected_match['team2_short']})")
+            col_l2, col_h2 = st.columns([1, 4])
+            with col_l2:
+                t2_logo = fetch_team_logo_bytes(selected_match["team2_name"], selected_match.get("team2_image_id")) or get_team_logo_url(selected_match["team2_name"], selected_match.get("team2_image_id"))
+                if t2_logo:
+                    st.image(t2_logo, width=64)
+                else:
+                    st.markdown("### ⚔️")
+            with col_h2:
+                st.markdown(f"### {selected_match['team2_name']}")
+                st.caption(f"Code: `{selected_match['team2_short']}`")
+
             if is_test_match:
                 with st.container(border=True):
                     t2_i1 = selected_match.get("team2_inngs1", {})
@@ -300,7 +331,7 @@ def app():
                     st.metric("Combined Score", selected_match["team2_score"])
             else:
                 st.metric(
-                    label=selected_match["team2_name"],
+                    label=f"{selected_match['team2_name']} Score",
                     value=selected_match["team2_score"]
                 )
 
